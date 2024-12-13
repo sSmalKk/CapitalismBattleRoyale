@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Game from "components/Game/Game";
 import { Helmet } from "react-helmet";
+import Inventory from "components/Inventory";
 
 type UniverseData = {
   name: string;
@@ -102,7 +103,7 @@ function SandboxSurvival() {
       </Helmet>
 
 
-
+      <Inventory topleft={[]} topright={[]} topmid={[]} bottomleft={[]} bottommid={[]} bottomright={[]}/>
       <Game
         customModels={customModels}
         blockState={blockState}
