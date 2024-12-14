@@ -18,7 +18,7 @@ interface SocketContextType {
 }
 
 const SocketContext = createContext<SocketContextType>({
-  updatePlayerPosition: () => {},
+  updatePlayerPosition: () => { },
   currentPlayerId: null,
 });
 
@@ -30,17 +30,19 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!socket) {
-      socket = io("http://localhost:3001");
+      const token = localStorage.getItem("token"); // Recupera o token do localStorage
+      socket = io("http://localhost:3001", {
+        auth: { token }, // Envia o token no handshake
+      });
 
       socket.on("connect", () => {
         localPlayerId.current = socket.id;
         console.log("Local player ID:", localPlayerId.current);
       });
 
-      socket.on("updatePlayers", (playerData: PlayerData[]) => {
-        setEntities(
-          playerData.filter((player) => player.id !== localPlayerId.current)
-        );
+      socket.on("updatePlayers", (playerData) => {
+        console.log("Dados recebidos dos jogadores:", playerData);
+        setEntities(playerData.filter((player) => player.id !== localPlayerId.current));
       });
     }
 
