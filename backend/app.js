@@ -9,7 +9,7 @@ const session = require('express-session');
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config({ path:'.env' });
+dotenv.config({ path: '.env' });
 global.__basedir = __dirname;
 const postmanToOpenApi = require('postman-to-openapi');
 const YAML = require('yamljs');
@@ -28,16 +28,23 @@ const { googlePassportStrategy } = require('./config/googlePassportStrategy');
 const { facebookPassportStrategy } = require('./config/facebookPassportStrategy');
 const app = express();
 const httpServer = require('http').createServer(app);
-const corsOptions = { origin: process.env.ALLOW_ORIGIN, };
+const corsOptions = {
+  origin: '*', // Permitir todas as origens
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+};
+
+
+
 app.use(cors(corsOptions));
 
 //template engine
-app.set('view engine', 'ejs'); 
+app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(require('./utils/response/responseHandler'));
 
 //all routes 
-const routes =  require('./routes');
+const routes = require('./routes');
 
 app.use(require('./middleware/activityLog').addActivityLog);
 
@@ -55,9 +62,9 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(passport.initialize());
 app.use(session({
-  secret:'my-secret',
-  resave:true,
-  saveUninitialized:false
+  secret: 'my-secret',
+  resave: true,
+  saveUninitialized: false
 }));
 app.use(routes);
 
@@ -66,7 +73,7 @@ postmanToOpenApi('postman/postman-collection.json', path.join('postman/swagger.y
   let result = YAML.load('postman/swagger.yml');
   result.servers[0].url = '/';
   app.use('/swagger', swaggerUi.serve, swaggerUi.setup(result));
-}).catch(e=>{
+}).catch(e => {
   console.log('Swagger Generation stopped due to some error');
 });
 
@@ -74,13 +81,13 @@ app.get('/', (req, res) => {
   res.render('index');
 });
 
-if (process.env.NODE_ENV !== 'test' ) {
+if (process.env.NODE_ENV !== 'test') {
 
   const seeder = require('./seeders');
   const allRegisterRoutes = listEndpoints(app);
-  seeder(allRegisterRoutes).then(()=>{console.log('Seeding done.');});
+  seeder(allRegisterRoutes).then(() => { console.log('Seeding done.'); });
   require('./services/socket/socket')(httpServer);
-  httpServer.listen(process.env.PORT,()=>{
+  httpServer.listen(process.env.PORT, () => {
     console.log(`your application is running on ${process.env.PORT}`);
   });
 } else {
