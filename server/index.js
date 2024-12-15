@@ -1,7 +1,50 @@
 import { Server } from "socket.io";
 import http from "http";
-import { addPlayer, removePlayer, updatePlayer, getPlayerList } from "./modules/players.js";
 
+const users = new Map(); // Armazena usuários e senhas
+const players = new Map(); // Armazena jogadores conectados
+
+// Funções auxiliares
+const registerUser = (nick, password) => {
+  if (users.has(nick)) throw new Error("Nick já está em uso.");
+  users.set(nick, password);
+};
+
+const authenticateUser = (nick, password) => {
+  if (!users.has(nick) || users.get(nick) !== password) {
+    throw new Error("Nick ou senha incorretos.");
+  }
+};
+
+const addPlayer = (nick) => {
+  if (!players.has(nick)) {
+    players.set(nick, {
+      id: nick,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0, 1],
+      velocity: { x: 0, y: 0, z: 0 },
+      lastUpdate: Date.now(),
+    });
+  }
+};
+
+const removePlayer = (nick) => {
+  players.delete(nick);
+};
+
+const updatePlayer = (nick, position, rotation, velocity) => {
+  if (players.has(nick)) {
+    const player = players.get(nick);
+    player.position = position;
+    player.rotation = rotation;
+    player.velocity = velocity;
+    player.lastUpdate = Date.now();
+  }
+};
+
+const getPlayerList = () => Array.from(players.values());
+
+// Configuração do servidor
 const server = http.createServer();
 const io = new Server(server, {
   cors: {
@@ -10,44 +53,43 @@ const io = new Server(server, {
   },
 });
 
-// Middleware para validar o token antes da conexão
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token; // Recebe o token do handshake
-  console.log("Token recebido no handshake:", token);
-
-  if (!token) {
-    return next(new Error("Token não fornecido.")); // Rejeita a conexão se o token não for enviado
-  }
-
-  // Aqui você pode validar o token de forma mais avançada, como verificar no banco de dados
-  next(); // Permite a conexão se o token for válido
-});
-
 server.listen(3001, () => {
   console.log("Socket.IO server listening on port 3001");
 });
 
-// Evento de conexão
+// Eventos Socket.IO
 io.on("connection", (socket) => {
-  console.log(`Player connected: ${socket.id}`);
-  addPlayer(socket.id); // Somente jogadores autenticados devem ser adicionados
+  console.log(`Nova conexão: ${socket.id}`);
 
-  // Envia a lista inicial de jogadores para todos os clientes conectados
-  io.emit("updatePlayers", getPlayerList());
+  socket.on("register", ({ nick, password }) => {
+    try {
+      registerUser(nick, password);
+      socket.emit("registerSuccess", "Registrado com sucesso!");
+    } catch (error) {
+      socket.emit("registerError", error.message);
+    }
+  });
 
-  // Gerencia atualizações de jogadores
+  socket.on("login", ({ nick, password }) => {
+    try {
+      authenticateUser(nick, password);
+      addPlayer(nick);
+      socket.emit("loginSuccess", { message: "Login bem-sucedido!", nick });
+      io.emit("updatePlayers", getPlayerList());
+    } catch (error) {
+      socket.emit("loginError", error.message);
+    }
+  });
+
   socket.on("playerPosition", ({ position, rotation, velocity }) => {
-    updatePlayer(socket.id, position, rotation, velocity);
-    console.log("Lista atualizada de jogadores:", getPlayerList());
+    const nick = socket.nick; // Identifica o jogador pelo socket
+    updatePlayer(nick, position, rotation, velocity);
     io.emit("updatePlayers", getPlayerList());
   });
 
-  // Remove jogador ao desconectar
   socket.on("disconnect", () => {
-    removePlayer(socket.id);
-    console.log(`Player disconnected: ${socket.id}`);
+    const nick = socket.nick; // Identifica o jogador
+    removePlayer(nick);
     io.emit("updatePlayers", getPlayerList());
   });
 });
-
-console.log("Socket.IO server is running.");

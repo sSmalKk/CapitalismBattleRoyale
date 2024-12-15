@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Game from "components/Game/Game";
 import { Helmet } from "react-helmet";
 import Inventory from "components/Inventory";
+import LoginRegister from "components/loginregister";
 
 type UniverseData = {
   name: string;
@@ -28,6 +29,7 @@ function SandboxSurvival() {
     layers: 1,
     actlayers: 1,
   });
+  const [loggedNick, setLoggedNick] = useState(null);
 
   // Definindo o blockState para diferentes tipos de blocos
   const blockState = {
@@ -96,14 +98,14 @@ function SandboxSurvival() {
   ];
 
 
-  return (
+  return loggedNick ? (
     <>
       <Helmet>
         <title>Sandbox Admin</title>
       </Helmet>
 
 
-      <Inventory topleft={[]} topright={[]} topmid={[]} bottomleft={[]} bottommid={[]} bottomright={[]}/>
+      <Inventory topleft={[]} topright={[]} topmid={[]} bottomleft={[]} bottommid={[]} bottomright={[]} />
       <Game
         customModels={customModels}
         blockState={blockState}
@@ -132,6 +134,8 @@ function SandboxSurvival() {
         ]}
       />
     </>
+  ) : (
+    <LoginRegister onLogin={setLoggedNick} />
   );
 }
 
