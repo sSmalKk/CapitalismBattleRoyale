@@ -3,6 +3,7 @@ import { useRoutes } from "react-router-dom";
 import NotFound from "pages/NotFound";
 import SandboxSurvival from "pages/SandboxSurvival";
 import Login from "pages/Login";
+import Register from "pages/Register";
 
 const ProjectRoutes = () => {
   let element = useRoutes([
@@ -14,6 +15,11 @@ const ProjectRoutes = () => {
     {
       path: "/sandboxsurvival",
       element: <SandboxSurvival />,
+    },
+    
+    {
+      path: "/Register",
+      element: <Register />,
     },{
       path: "/",
       element: <Login />,

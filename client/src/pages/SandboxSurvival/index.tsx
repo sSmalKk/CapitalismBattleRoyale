@@ -1,23 +1,23 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Game from "components/Game/Game";
 import { Helmet } from "react-helmet";
 import Inventory from "components/Inventory";
 
 type UniverseData = {
   name: string;
-  CreateAt: string; // Deve ser uma string formatada como data
+  CreateAt: string;
   age: number;
-  Sectiontime: string; // Deve ser uma string formatada como hora
+  Sectiontime: string;
   hastime: boolean;
-  expansionRate: number; // Valor estático de expansão
-  layers: number; // Valor dinâmico calculado
-  actlayers: number; // Valor dinâmico calculado
+  expansionRate: number;
+  layers: number;
+  actlayers: number;
 };
 
 function SandboxSurvival() {
   const [userData, setUserData] = useState<any>(null);
-  const [interfaceOpen] = useState(true);
-  const [loadingLayer, setLoadingLayer] = useState<number>(1); // Estado para o layer que está sendo carregado
+  const [loading, setLoading] = useState(true); // Estado de carregamento
+  const [loadingLayer, setLoadingLayer] = useState<number>(1);
   const [universeData, setUniverseData] = useState<UniverseData>({
     name: "test",
     CreateAt: "",
@@ -29,27 +29,58 @@ function SandboxSurvival() {
     actlayers: 1,
   });
 
-  // Definindo o blockState para diferentes tipos de blocos
+  const token = localStorage.getItem("token") || process.env.JWT || "";
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!token) {
+        console.error("Token not found");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const endpoint = "http://localhost:5000/client/api/v1/user/me";
+        const response = await fetch(endpoint, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch user data: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setUserData(data.data);
+        localStorage.setItem("userData", JSON.stringify(data.data)); // Armazena os dados no localStorage
+        console.log("User Data:", data.data);
+      } catch (error) {
+        console.error("Error fetching user info:", error);
+      } finally {
+        setLoading(false); // Define que o carregamento terminou
+      }
+    };
+
+    fetchUserData();
+  }, [token]);
+
   const blockState = {
-    0: { texture: 'stone', model: 'box', RigidBody: "fixed", RigidBodyType: "cuboid" }, // Bloco voxel padrão
-    1: { texture: 'wood', model: 'globe', RigidBody: "fixed", RigidBodyType: "cuboid" }, // Globo
-    2: { texture: 'brick', model: 'stairs', RigidBody: "fixed", RigidBodyType: "cuboid" }, // Forma personalizada (escada para teste)
+    0: { texture: "stone", model: "box", RigidBody: "fixed", RigidBodyType: "cuboid" },
+    1: { texture: "wood", model: "globe", RigidBody: "fixed", RigidBodyType: "cuboid" },
+    2: { texture: "brick", model: "stairs", RigidBody: "fixed", RigidBodyType: "cuboid" },
   };
 
   const customModels = {
     stairs: [
-      { position: [0, 0, 0.5], rotation: [0, 0, 0], render: true },   // Frente
-      { position: [0, 0, 0], rotation: [-Math.PI / 2, 0, 0], render: true },  // Trás
-      // Adicione mais configurações de planos customizados aqui
-    ],
-    customModelName: [
-      { position: [0, 0, 0.5], rotation: [0, 0, 0], render: true },   // Exemplo para um modelo customizado
-      // Adicione as configurações do modelo customizado aqui
+      { position: [0, 0, 0.5], rotation: [0, 0, 0], render: true },
+      { position: [0, 0, 0], rotation: [-Math.PI / 2, 0, 0], render: true },
     ],
   };
 
-
-  const setlayer = (increase: boolean) => {
+  const setLayer = (increase: boolean) => {
     setUniverseData((prevData) => {
       let newActLayers = prevData.actlayers;
       if (increase) {
@@ -61,40 +92,50 @@ function SandboxSurvival() {
     });
   };
 
-
   const textures = {
-    stone: '/assets/textures/cubes/stone.png',
-    wood: '/assets/textures/cubes/wood.png',
-    brick: '/assets/textures/cubes/stone.png',
+    stone: "/assets/textures/cubes/stone.png",
+    wood: "/assets/textures/cubes/wood.png",
+    brick: "/assets/textures/cubes/stone.png",
   };
 
   const cubesArray = [];
 
-  // Cria o chão
   for (let x = -10; x <= 10; x++) {
     for (let z = -10; z <= 10; z++) {
-      cubesArray.push([x, 0, z, 0]); // '1' representa o tipo de bloco (pode ajustar conforme necessário)
+      cubesArray.push([x, 0, z, 0]);
     }
   }
 
-  // Adiciona os cubos na altura 1
   cubesArray.push([0, 2, 0, 1]);
   cubesArray.push([1, 2, 0, 2]);
-  cubesArray.push([3, 2, 0, 0]);  // Adiciona os cubos na altura 1
+  cubesArray.push([3, 2, 0, 0]);
   cubesArray.push([0, 1, 1, 1]);
   cubesArray.push([1, 1, 1, 2]);
   cubesArray.push([2, 2, 1, 3]);
   cubesArray.push([3, 1, 1, 0]);
 
-  console.log(cubesArray);
-
   const chunks = [
     {
       position: [1, 0, 0],
-      cubesArray: cubesArray
+      cubesArray: cubesArray,
     },
   ];
 
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          fontSize: "1.5rem",
+        }}
+      >
+        Carregando dados do usuário...
+      </div>
+    );
+  }
 
   return (
     <>
@@ -102,8 +143,14 @@ function SandboxSurvival() {
         <title>Sandbox Admin</title>
       </Helmet>
 
-
-      <Inventory topleft={[]} topright={[]} topmid={[]} bottomleft={[]} bottommid={[]} bottomright={[]}/>
+      <Inventory
+        topleft={[]}
+        topright={[]}
+        topmid={[]}
+        bottomleft={[]}
+        bottommid={[]}
+        bottomright={[]}
+      />
       <Game
         customModels={customModels}
         blockState={blockState}
@@ -113,7 +160,7 @@ function SandboxSurvival() {
         renderDistance={15}
         gravity={[0, -9.81, 0]}
         pointLightPosition={[5, 10, 5]}
-        initialPlayerPosition={[2, 20, 2]}
+        initialPlayerPosition={[userData?.x || 0, userData?.y || 22, userData?.z || 0]}
         sunPosition={[150, 50, 150]}
         ambientLightIntensity={1.5}
         pointLightIntensity={0.5}

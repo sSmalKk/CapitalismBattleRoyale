@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody, CapsuleCollider } from "@react-three/rapier";
 import * as THREE from "three";
@@ -14,32 +14,34 @@ export const Player = ({
   sideVector = new THREE.Vector3(),
 }) => {
   const rigidBodyRef = useRef(null);
-  const { updatePlayerPosition, currentPlayerId } = useSocket(); // Adiciona o `currentPlayerId` para diferenciar o jogador local
+  const { updatePosition } = useSocket();
   const [, getKeys] = useKeyboardControls();
+  const lastSentData = useRef({ position: null, rotation: null });
+  const lastChunkPosition = useRef([0, 0, 0]);
+  const [userId, setUserId] = useState(null);
+
+  // Carrega o userId apenas uma vez
+  useEffect(() => {
+    const data = localStorage.getItem("userData");
+    if (data) {
+      try {
+        const parsedData = JSON.parse(data);
+        setUserId(parsedData.id); // Define apenas o ID do usuário
+      } catch (error) {
+        console.error("Erro ao analisar userData do localStorage:", error);
+      }
+    } else {
+      console.warn("Nenhum userData encontrado no localStorage");
+    }
+  }, []);
 
   useEffect(() => {
-    if (!rigidBodyRef.current) return;
+    if (!rigidBodyRef.current || !userId) return;
 
     const initialTranslation = rigidBodyRef.current.translation?.() || [0, 0, 0];
-    const initialRotation = rigidBodyRef.current.rotation
-      ? [
-        rigidBodyRef.current.rotation().x,
-        rigidBodyRef.current.rotation().y,
-        rigidBodyRef.current.rotation().z,
-        rigidBodyRef.current.rotation().w,
-      ]
-      : [0, 0, 0, 1];
-    const initialVelocity = rigidBodyRef.current.linvel?.() || [0, 0, 0];
-
-    console.log("Initializing player state:", {
-      position: initialTranslation,
-      rotation: initialRotation,
-      velocity: initialVelocity,
-    });
-
-    // Atualiza o servidor com as informações iniciais do jogador
-    updatePlayerPosition(initialTranslation, initialRotation, initialVelocity);
-  }, []);
+    const initialRotation = rigidBodyRef.current.rotation?.() || [0, 0, 0, 1];
+    updatePosition(userId, initialTranslation, initialRotation);
+  }, [userId]);
 
   useFrame((state) => {
     if (!rigidBodyRef.current) return;
@@ -58,7 +60,6 @@ export const Player = ({
       .multiplyScalar(speed)
       .applyEuler(state.camera.rotation);
 
-    // Movimenta o jogador local
     rigidBodyRef.current.setLinvel({
       x: direction.x,
       y: velocity.y,
@@ -69,27 +70,36 @@ export const Player = ({
       rigidBodyRef.current.setLinvel({ x: velocity.x, y: 7.5, z: velocity.z });
     }
 
-    // Obtenha a posição e rotação sem interferir no comportamento local
     const translationVector = rigidBodyRef.current.translation?.() || new THREE.Vector3();
     const preciseTranslation = [translationVector.x, translationVector.y, translationVector.z];
     const rotationQuaternion = new THREE.Quaternion();
-    state.camera.getWorldQuaternion(rotationQuaternion); // Pega a rotação da câmera como quaternion
+    state.camera.getWorldQuaternion(rotationQuaternion);
 
-    // Calcula os valores arredondados para enviar ao servidor (com 2 decimais)
-    const roundedTranslation = preciseTranslation.map((value) => parseFloat(value.toFixed(2)));
+    if (
+      !lastSentData.current.position ||
+      !lastSentData.current.rotation ||
+      !(new THREE.Vector3(...preciseTranslation).equals(new THREE.Vector3(...lastSentData.current.position))) ||
+      !(new THREE.Quaternion(...rotationQuaternion.toArray()).equals(new THREE.Quaternion(...lastSentData.current.rotation)))
+    ) {
+      lastSentData.current = { position: preciseTranslation, rotation: rotationQuaternion.toArray() };
+      updatePosition(userId, preciseTranslation, rotationQuaternion.toArray());
+    }
 
-    // Atualiza o servidor apenas com os dados arredondados
-    const currentVelocity = rigidBodyRef.current.linvel?.() || [0, 0, 0];
-    updatePlayerPosition(roundedTranslation, rotationQuaternion.toArray(), currentVelocity);
-
-    // Atualiza a câmera e chunks (mantendo valores precisos para o local)
     state.camera.position.set(...preciseTranslation);
 
-    setChunkPosition([
+    const newChunkPosition = [
       Math.round(preciseTranslation[0] / 16),
       0,
       Math.round(preciseTranslation[2] / 16),
-    ]);
+    ];
+
+    if (
+      lastChunkPosition.current[0] !== newChunkPosition[0] ||
+      lastChunkPosition.current[2] !== newChunkPosition[2]
+    ) {
+      lastChunkPosition.current = newChunkPosition;
+      setChunkPosition(newChunkPosition);
+    }
   });
 
   return (
@@ -98,8 +108,7 @@ export const Player = ({
       colliders={false}
       type="dynamic"
       position={initialPosition}
-      
-      enabledRotations={[false, true, false]} // Permitir rotação
+      enabledRotations={[false, true, false]}
     >
       <CapsuleCollider args={[2, 0.5]} position={[0, 1, 0]} />
     </RigidBody>

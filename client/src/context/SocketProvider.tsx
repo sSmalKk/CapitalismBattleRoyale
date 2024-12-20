@@ -1,70 +1,86 @@
 import React, { createContext, useContext, useEffect, ReactNode, useRef } from "react";
-import { io } from "socket.io-client";
-import { useGameStore } from "../store/gameStore";
-
-interface PlayerData {
-  id: string;
-  position: [number, number, number];
-  rotation: [number, number, number, number];
-}
+import { io, Socket } from "socket.io-client";
 
 interface SocketContextType {
-  updatePlayerPosition: (
+  updatePosition: (
+    userId: string,
     position: [number, number, number],
-    rotation: [number, number, number, number],
-    velocity: [number, number, number]
+    rotation: [number, number, number]
   ) => void;
-  currentPlayerId: string | null;
+  getVisiblePlayers: (
+    userId: string,
+    position: [number, number, number],
+    renderDistance: number
+  ) => Promise<any>;
+  socket: Socket | null;
 }
 
+// Corrigindo o nome da função para coincidir com a interface
 const SocketContext = createContext<SocketContextType>({
-  updatePlayerPosition: () => { },
-  currentPlayerId: null,
+  updatePosition: () => { }, // Nome correto da função
+  getVisiblePlayers: async () => [],
+  socket: null,
 });
 
-let socket;
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
-  const { setEntities } = useGameStore();
-  const localPlayerId = useRef<string | null>(null);
+  const socket = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!socket) {
-      const token = localStorage.getItem("token"); // Recupera o token do localStorage
-      socket = io("http://localhost:3001", {
-        auth: { token }, // Envia o token no handshake
-      });
+    // Inicializa a conexão do socket
+    socket.current = io("http://localhost:5000", {
+      transports: ["websocket", "polling"],
+    });
 
-      socket.on("connect", () => {
-        localPlayerId.current = socket.id;
-        console.log("Local player ID:", localPlayerId.current);
-      });
+    socket.current.on("connect", () => {
+      console.log("Conectado ao servidor de sockets:", socket.current?.id);
+    });
 
-      socket.on("updatePlayers", (playerData) => {
-        console.log("Dados recebidos dos jogadores:", playerData);
-        setEntities(playerData.filter((player) => player.id !== localPlayerId.current));
-      });
-    }
+    socket.current.on("disconnect", () => {
+      console.log("Desconectado do servidor de sockets.");
+    });
 
     return () => {
-      socket.disconnect();
+      // Desconecta o socket ao desmontar o componente
+      socket.current?.disconnect();
     };
-  }, [setEntities]);
+  }, []);
 
-  const updatePlayerPosition = (
+  // Função para atualizar posição
+  const updatePosition = (
+    userId: string,
     position: [number, number, number],
-    rotation: [number, number, number, number],
-    velocity: [number, number, number]
+    rotation: [number, number, number]
   ) => {
-    if (!localPlayerId.current) return;
-    socket.emit("playerPosition", { position, rotation, velocity });
+    if (!socket.current) return;
+    socket.current.emit("updatePosition", { userId, position, rotation });
+    console.log("Atualizando posição no servidor:", { userId, position, rotation });
   };
 
+  // Função para obter jogadores visíveis
+  const getVisiblePlayers = async (
+    userId: string,
+    position: [number, number, number],
+    renderDistance: number
+  ) => {
+    return new Promise((resolve, reject) => {
+      if (!socket.current) return reject("Socket not connected.");
+      socket.current.emit(
+        "getVisiblePlayers",
+        { userId, position, renderDistance },
+        (response: any) => {
+          if (response.success) resolve(response.data);
+          else reject(response.message);
+        }
+      );
+    });
+  };
   return (
-    <SocketContext.Provider value={{ updatePlayerPosition, currentPlayerId: localPlayerId.current }}>
+    <SocketContext.Provider value={{ updatePosition, getVisiblePlayers, socket: socket.current }}>
       {children}
     </SocketContext.Provider>
   );
 };
 
+// Hook para acessar o contexto
 export const useSocket = () => useContext(SocketContext);

@@ -1,24 +1,38 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useSocket } from "context/SocketProvider";
 import { useGameStore } from "store/gameStore";
 import SimpleEntity from "./SimpleEntity";
 
-export function Entities() {
+export function Entities({ currentPlayerId, currentPosition, renderDistance }: { 
+  currentPlayerId: string; 
+  currentPosition: [number, number, number]; 
+  renderDistance: number; 
+}) {
+  const { getVisiblePlayers } = useSocket();
+  const [visibleEntities, setVisibleEntities] = useState([]);
   const entities = useGameStore((state) => state.entities);
-  const { currentPlayerId } = useSocket();
 
-  const filteredEntities = entities.filter(
-    (entity) => entity.id !== currentPlayerId && Array.isArray(entity.position)
-  );
+  useEffect(() => {
+    const fetchVisibleEntities = async () => {
+      try {
+        const players = await getVisiblePlayers(currentPlayerId, currentPosition, renderDistance);
+        setVisibleEntities(players);
+      } catch (error) {
+        console.error("Error fetching visible players:", error);
+      }
+    };
 
-  if (!filteredEntities.length) {
+    fetchVisibleEntities();
+  }, [currentPlayerId, currentPosition, renderDistance, getVisiblePlayers]);
+
+  if (!visibleEntities.length) {
     console.warn("Nenhuma entidade encontrada para renderizar.");
     return null;
   }
 
   return (
     <>
-      {filteredEntities.map(({ id, position, rotation }) => (
+      {visibleEntities.map(({ id, position, rotation }) => (
         <SimpleEntity
           key={id}
           id={id}
